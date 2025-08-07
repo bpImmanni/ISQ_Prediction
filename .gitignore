@@ -1,0 +1,48 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+.env.*
+
+# Jupyter/IPython Notebook checkpoints
+.ipynb_checkpoints
+
+# Streamlit
+.streamlit/
+.streamlit/config.toml
+
+# VS Code and other IDE settings
+.vscode/
+.idea/
+
+# MacOS/Linux/Windows system files
+.DS_Store
+Thumbs.db
+
+# Output files
+*.log
+*.pdf
+*.xlsx
+*.csv
+*.zip
+*.pkl
+*.joblib
+
+# Pytest and coverage reports
+.coverage
+.cache/
+coverage.xml
+
+# Docker-related
+*.tar
+*.img
+*.bak
+
+# Virtual environment (if any)
+venv/
+env/
+.venv/
+
