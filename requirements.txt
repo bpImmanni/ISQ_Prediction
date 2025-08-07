@@ -8,3 +8,5 @@ tenacity
 python-dotenv
 yagmail
 xgboost
+gspread
+oauth2client

@@ -1,5 +1,3 @@
-# app.py
-
 import os
 import streamlit as st
 import pandas as pd
@@ -8,27 +6,7 @@ from train_model import train_model_on_dataframe
 from predict import run_po_delay_model
 from vendor_analysis import generate_vendor_report
 from alert_email import send_alert_email
-
-# Simple domain-based login
-ALLOWED_DOMAIN = "brandeis.edu"
-CORRECT_PASSWORD = st.secrets["auth"]["password"]  # stored securely in .streamlit/secrets.toml
-
-def login():
-    st.sidebar.title("🔐 Login Required")
-    email = st.sidebar.text_input("Email", "")
-    password = st.sidebar.text_input("Password", "", type="password")
-
-    if st.sidebar.button("Login"):
-        if email.endswith(f"@{ALLOWED_DOMAIN}") and password == CORRECT_PASSWORD:
-            st.session_state["authenticated"] = True
-        else:
-            st.sidebar.error("❌ Invalid credentials. Only @brandeis.edu emails allowed.")
-
-# Check session
-if "authenticated" not in st.session_state:
-    login()
-    st.stop()
-
+import datetime
 
 # ------------------------------
 # Streamlit Config
@@ -38,6 +16,40 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="auto"
 )
+
+# ------------------------------
+# Role-Based Login with Multi-Domain Support
+# ------------------------------
+CORRECT_PASSWORD = st.secrets["auth"]["password"]
+ADMIN_EMAIL = st.secrets["auth"]["admin"]
+ANALYST_EMAILS = st.secrets["auth"]["analysts"]
+ALLOWED_DOMAINS = st.secrets["auth"]["allowed_domains"]
+
+st.sidebar.title("🔐 Login Required")
+email = st.sidebar.text_input("Email")
+password = st.sidebar.text_input("Password", type="password")
+
+if st.sidebar.button("Login"):
+    domain = email.split("@")[-1] if "@" in email else ""
+    if domain in ALLOWED_DOMAINS and password == CORRECT_PASSWORD:
+        st.session_state["authenticated"] = True
+        st.session_state["user_email"] = email
+    else:
+        st.sidebar.error("❌ Invalid credentials or unauthorized email domain.")
+
+# Auth check
+if "authenticated" not in st.session_state:
+    st.stop()
+
+user_email = st.session_state["user_email"]
+if user_email == ADMIN_EMAIL:
+    user_role = "admin"
+elif user_email in ANALYST_EMAILS:
+    user_role = "analyst"
+else:
+    user_role = "viewer"
+    st.error("Access denied: Your email is not authorized.")
+    st.stop()
 
 st.title("📦 Purchase Order Delay Prediction & Vendor Performance Dashboard")
 
@@ -50,41 +62,31 @@ if uploaded_file:
     st.info("✅ File uploaded. Starting processing...")
 
     try:
-        # Step 1: Clean the uploaded file
         df_clean = clean_uploaded_file(uploaded_file)
         st.success("✅ Data cleaned successfully.")
         st.dataframe(df_clean.head(), use_container_width=True)
 
-        # Step 2: Train model on cleaned data
+        from log_to_gsheet import log_to_google_sheet
+        log_to_google_sheet(user_email, uploaded_file.name, len(df_clean))
+
         train_model_on_dataframe(df_clean)
         st.success("✅ Model trained and saved.")
 
-        # Sidebar settings
         st.sidebar.header("Prediction Settings")
         threshold = st.sidebar.slider("Set delay risk threshold", 0.0, 1.0, 0.7)
 
-        # Step 3: Run predictions
         prediction_df, alert_df = run_po_delay_model(df_clean, threshold=threshold)
         st.success("✅ Predictions completed.")
 
-        # Save to OneDrive folder
         ONEDRIVE_PATH = r"C:\Users\sarit\OneDrive - brandeis.edu\PO_Delay_Folder"
         os.makedirs(ONEDRIVE_PATH, exist_ok=True)
         one_drive_file_path = os.path.join(ONEDRIVE_PATH, "po_predictions.csv")
         prediction_df.to_csv(one_drive_file_path, index=False)
         st.success(f"✅ File also saved to OneDrive: {one_drive_file_path}")
 
-        # Step 4: Vendor metrics
         vendor_df = generate_vendor_report(df_clean)
         st.success("✅ Vendor report generated.")
 
-        # Debug checks
-        st.write("🔎 prediction_df:", prediction_df.shape)
-        st.write("🔎 vendor_df:", vendor_df.shape)
-
-        # ------------------------------
-        # Tabs for Results
-        # ------------------------------
         tab1, tab2 = st.tabs(["🔮 PO Delay Prediction", "📊 Vendor Performance Analysis"])
 
         with tab1:
@@ -105,16 +107,17 @@ if uploaded_file:
                 if st.button("✉️ Send Alert Email"):
                     send_alert_email(alert_df)
 
-        with tab2:
-            st.subheader("📊 Vendor Performance")
-            st.dataframe(vendor_df, use_container_width=True)
+        if user_role == "admin":
+            with tab2:
+                st.subheader("📊 Vendor Performance")
+                st.dataframe(vendor_df, use_container_width=True)
 
-            st.download_button(
-                "📥 Download Vendor Report",
-                data=vendor_df.to_csv(index=False).encode(),
-                file_name="vendor_report.csv",
-                mime="text/csv"
-            )
+                st.download_button(
+                    "📥 Download Vendor Report",
+                    data=vendor_df.to_csv(index=False).encode(),
+                    file_name="vendor_report.csv",
+                    mime="text/csv"
+                )
 
         # ------------------------------
         # Power BI Dashboard Embed
@@ -123,8 +126,6 @@ if uploaded_file:
         st.subheader("📈 Live Power BI Dashboard")
         st.info("This dashboard is connected to your synced OneDrive predictions folder.")
 
-        powerbi_embed_url = "https://app.powerbi.com/links/2-N4iVJRGt?ctid=02e496e0-bb8f-4ec3-bf4d-6e3cd4bd4ba4&pbi_source=linkShare"
-
         st.markdown("""
 <h3>📊 Power BI Dashboard</h3>
 <iframe width="100%" height="800"
@@ -132,8 +133,6 @@ if uploaded_file:
         frameborder="0" allowFullScreen="true">
 </iframe>
 """, unsafe_allow_html=True)
-
-
 
     except Exception as e:
         st.error(f"🚨 An error occurred: {e}")
