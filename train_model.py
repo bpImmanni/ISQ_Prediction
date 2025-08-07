@@ -1,55 +1,43 @@
 # train_model.py
 
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
+import xgboost as xgb
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report
 import joblib
 import os
 
 def train_model_on_dataframe(df):
-    """
-    Trains a delay prediction model using in-memory cleaned DataFrame.
-    Saves the trained model to models/model.pkl.
-    """
-    # Ensure output folder exists
-    os.makedirs("models", exist_ok=True)
+    # Drop rows with missing target
+    df = df.dropna(subset=['days_to_close'])
 
-    # Create target column: delay if days_to_close > 30
-    if 'days_to_close' not in df.columns:
-        raise ValueError("Missing 'days_to_close' column in DataFrame.")
-    
-    df = df.copy()
-    df['is_delayed'] = (df['days_to_close'] > 30).astype(int)
+    # Binary classification: PO is delayed if days_to_close > 30
+    df['is_late'] = df['days_to_close'] > 30
 
-    # Features to use
-    features = [
-        'days_aging', 'po_type', 'po_status_desc', 'cost_amount',
-        'order_qty', 'po_agent', 'facility_description', 'warehouse'
-    ]
+    # Drop raw target
+    df = df.drop(columns=['days_to_close'])
 
-    # Check for missing features
-    missing = [col for col in features if col not in df.columns]
-    if missing:
-        raise ValueError(f"Missing columns in training data: {missing}")
+    # Feature engineering - datetime columns
+    date_cols = ['po_date', 'receiver_date', 'date_last_changed', 'date_passed_to_acctg', 'payment_date']
+    for col in date_cols:
+        if col in df.columns:
+            df[f"{col}_month"] = df[col].dt.month
+            df[f"{col}_weekday"] = df[col].dt.weekday
+    df.drop(columns=date_cols, inplace=True, errors='ignore')
 
-    # One-hot encode
-    X = pd.get_dummies(df[features])
-    y = df['is_delayed']
+    # One-hot encoding for categorical variables
+    X = pd.get_dummies(df.drop(columns=['is_late']))
+    y = df['is_late']
 
-    # Train/test split
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    # Align missing/extra columns
+    X = X.fillna(0)
 
-    # Train model
-    model = RandomForestClassifier(n_estimators=100, max_depth=8, random_state=42)
+    # Train-test split
+    X_train, X_test, y_train, y_test = train_test_split(X, y, stratify=y, random_state=42)
+
+    # Train XGBoost model
+    model = xgb.XGBClassifier(use_label_encoder=False, eval_metric='logloss')
     model.fit(X_train, y_train)
 
-    # Optional: Print evaluation to console
-    y_pred = model.predict(X_test)
-    print("\n✅ Model Evaluation:")
-    print(classification_report(y_test, y_pred))
-
     # Save model
-    model.feature_names_in_ = X.columns  # save input features for use in predict.py
+    os.makedirs("models", exist_ok=True)
     joblib.dump(model, "models/model.pkl")
-    print("✅ Trained model saved to models/model.pkl")

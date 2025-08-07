@@ -1,46 +1,43 @@
 # predict.py
 
 import pandas as pd
-import numpy as np
 import joblib
 import os
 
-MODEL_PATH = os.path.join("models", "model.pkl")
-
-def run_po_delay_model(df_clean, threshold=0.7):
-    """
-    Loads the ML model, predicts delay probabilities, and returns:
-    - Full dataframe with predictions
-    - Alert dataframe with high-probability delays
-    """
-    if not os.path.exists(MODEL_PATH):
+def run_po_delay_model(df, threshold=0.7):
+    model_path = "models/model.pkl"
+    if not os.path.exists(model_path):
         raise FileNotFoundError("Trained model not found in 'models/model.pkl'")
 
-    model = joblib.load(MODEL_PATH)
+    model = joblib.load(model_path)
 
-    features = [
-        'days_aging', 'po_type', 'po_status_desc', 'cost_amount',
-        'order_qty', 'po_agent', 'facility_description', 'warehouse'
-    ]
+    # Feature Engineering - match training
+    date_cols = ['po_date', 'receiver_date', 'date_last_changed', 'date_passed_to_acctg', 'payment_date']
+    for col in date_cols:
+        if col in df.columns:
+            df[f"{col}_month"] = df[col].dt.month
+            df[f"{col}_weekday"] = df[col].dt.weekday
 
-    missing = [col for col in features if col not in df_clean.columns]
-    if missing:
-        raise ValueError(f"Missing columns for prediction: {missing}")
+    df.drop(columns=date_cols, inplace=True, errors='ignore')
 
-    X = pd.get_dummies(df_clean[features])
-    model_features = model.feature_names_in_
+    # Drop target if present
+    if 'days_to_close' in df.columns:
+        df = df.drop(columns=['days_to_close'])
 
+    # Apply same encoding
+    X = pd.get_dummies(df)
+
+    # Align with model training features
+    model_features = model.get_booster().feature_names
     for col in model_features:
         if col not in X.columns:
-            X[col] = 0
+            X[col] = 0  # Add missing
+    X = X[model_features]  # Match order
 
-    X = X[model_features]
-
+    # Predict
     probs = model.predict_proba(X)[:, 1]
-    df_clean['delay_probability'] = probs
-    df_clean['predicted_status'] = np.where(probs >= threshold, 'DELAYED', 'ON TIME')
+    df['delay_risk_score'] = probs
+    df['is_late_predicted'] = (probs >= threshold)
 
-    alert_df = df_clean[df_clean['predicted_status'] == 'DELAYED']
-    alert_df = alert_df[alert_df['delay_probability'] >= threshold]
-
-    return df_clean, alert_df
+    alert_df = df[df['is_late_predicted'] == True]
+    return df, alert_df

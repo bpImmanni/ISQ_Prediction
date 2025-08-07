@@ -7,3 +7,4 @@ fpdf
 tenacity
 python-dotenv
 yagmail
+xgboost
