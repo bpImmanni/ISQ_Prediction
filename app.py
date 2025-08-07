@@ -125,19 +125,15 @@ if uploaded_file:
 
         powerbi_embed_url = "https://app.powerbi.com/links/2-N4iVJRGt?ctid=02e496e0-bb8f-4ec3-bf4d-6e3cd4bd4ba4&pbi_source=linkShare"
 
-        st.markdown(
-            f"""
-            <iframe
-                title="PO Dashboard"
-                width="100%"
-                height="600"
-                src="{powerbi_embed_url}"
-                frameborder="0"
-                allowFullScreen="true">
-            </iframe>
-            """,
-            unsafe_allow_html=True
-        )
+        st.markdown("""
+<h3>📊 Power BI Dashboard</h3>
+<iframe width="100%" height="800"
+        src="https://app.powerbi.com/view?r=eyJrIjoiN2QzYzY0ZjItZTAzZC00MTFiLWI1OWItNmYyM2ExMThkOTRkIiwidCI6IjAyZTQ5NmUwLWJiOGYtNGVjMy1iZjRkLTZlM2NkNGJkNGJhNCIsImMiOjN9" 
+        frameborder="0" allowFullScreen="true">
+</iframe>
+""", unsafe_allow_html=True)
+
+
 
     except Exception as e:
         st.error(f"🚨 An error occurred: {e}")
