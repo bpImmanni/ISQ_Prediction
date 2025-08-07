@@ -1,5 +1,6 @@
 # app.py
 
+import os
 import streamlit as st
 import pandas as pd
 from clean_data import clean_uploaded_file
@@ -7,6 +8,27 @@ from train_model import train_model_on_dataframe
 from predict import run_po_delay_model
 from vendor_analysis import generate_vendor_report
 from alert_email import send_alert_email
+
+# Simple domain-based login
+ALLOWED_DOMAIN = "brandeis.edu"
+CORRECT_PASSWORD = st.secrets["auth"]["password"]  # stored securely in .streamlit/secrets.toml
+
+def login():
+    st.sidebar.title("🔐 Login Required")
+    email = st.sidebar.text_input("Email", "")
+    password = st.sidebar.text_input("Password", "", type="password")
+
+    if st.sidebar.button("Login"):
+        if email.endswith(f"@{ALLOWED_DOMAIN}") and password == CORRECT_PASSWORD:
+            st.session_state["authenticated"] = True
+        else:
+            st.sidebar.error("❌ Invalid credentials. Only @brandeis.edu emails allowed.")
+
+# Check session
+if "authenticated" not in st.session_state:
+    login()
+    st.stop()
+
 
 # ------------------------------
 # Streamlit Config
@@ -44,6 +66,13 @@ if uploaded_file:
         # Step 3: Run predictions
         prediction_df, alert_df = run_po_delay_model(df_clean, threshold=threshold)
         st.success("✅ Predictions completed.")
+
+        # Save to OneDrive folder
+        ONEDRIVE_PATH = r"C:\Users\sarit\OneDrive - brandeis.edu\PO_Delay_Folder"
+        os.makedirs(ONEDRIVE_PATH, exist_ok=True)
+        one_drive_file_path = os.path.join(ONEDRIVE_PATH, "po_predictions.csv")
+        prediction_df.to_csv(one_drive_file_path, index=False)
+        st.success(f"✅ File also saved to OneDrive: {one_drive_file_path}")
 
         # Step 4: Vendor metrics
         vendor_df = generate_vendor_report(df_clean)
@@ -86,6 +115,29 @@ if uploaded_file:
                 file_name="vendor_report.csv",
                 mime="text/csv"
             )
+
+        # ------------------------------
+        # Power BI Dashboard Embed
+        # ------------------------------
+        st.markdown("---")
+        st.subheader("📈 Live Power BI Dashboard")
+        st.info("This dashboard is connected to your synced OneDrive predictions folder.")
+
+        powerbi_embed_url = "https://app.powerbi.com/links/2-N4iVJRGt?ctid=02e496e0-bb8f-4ec3-bf4d-6e3cd4bd4ba4&pbi_source=linkShare"
+
+        st.markdown(
+            f"""
+            <iframe
+                title="PO Dashboard"
+                width="100%"
+                height="600"
+                src="{powerbi_embed_url}"
+                frameborder="0"
+                allowFullScreen="true">
+            </iframe>
+            """,
+            unsafe_allow_html=True
+        )
 
     except Exception as e:
         st.error(f"🚨 An error occurred: {e}")
