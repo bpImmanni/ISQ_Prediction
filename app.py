@@ -14,7 +14,7 @@ from alert_email import send_alert_email
 st.set_page_config(
     page_title="PO Delay & Vendor Analysis",
     layout="wide",
-    initial_sidebar_state="auto"
+    initial_sidebar_state="auto "
 )
 
 st.title("📦 Purchase Order Delay Prediction & Vendor Performance Dashboard")
