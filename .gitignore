@@ -25,7 +25,6 @@ Thumbs.db
 # Output files
 *.log
 *.pdf
-*.xlsx
 *.csv
 *.zip
 *.pkl
