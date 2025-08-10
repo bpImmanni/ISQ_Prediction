@@ -46,3 +46,4 @@ venv/
 env/
 .venv/
 
+gcp_service_account.json
